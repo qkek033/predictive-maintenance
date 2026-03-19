@@ -38,18 +38,34 @@ def health():
 
 @app.post("/predict")
 def predict(body: dict):
-    """feature 값을 받아 predicted_rul, risk_status 반환. 필수 feature 누락·타입 오류 시 422."""
+    """
+    입력: {"features": {"cycle": 100, "op_setting_1": 0.5, ...}} (feature 이름을 키로 하는 dict).
+    출력: {"prediction": RUL 예측값, "risk": "SAFE"|"WARNING"|"CRITICAL"}.
+    필수 컬럼 누락·허용되지 않은 키·타입 오류 시 422. 기존 모델·inference.risk만 재사용.
+    """
     if _model is None:
         raise HTTPException(status_code=503, detail="모델이 로드되지 않았습니다. 학습 후 아티팩트를 저장하세요.")
-    missing = [c for c in _feature_columns if c not in body]
+    raw = body.get("features")
+    if raw is None:
+        raise HTTPException(status_code=422, detail="필수 키 누락: features")
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=422, detail="features는 객체(dict)여야 합니다.")
+    # 필수 컬럼 누락 검사
+    missing = [c for c in _feature_columns if c not in raw]
     if missing:
         raise HTTPException(status_code=422, detail=f"필수 feature 누락: {missing}")
+    # 허용되지 않은 키(extra) 검사
+    extra = [k for k in raw if k not in _feature_columns]
+    if extra:
+        raise HTTPException(status_code=422, detail=f"허용되지 않은 feature(제거 필요): {extra}")
+    # 값 타입 검사: 모두 숫자여야 함
     for col in _feature_columns:
-        v = body[col]
+        v = raw[col]
         if v is None or not isinstance(v, (int, float)):
             raise HTTPException(status_code=422, detail=f"feature 타입 오류(숫자 아님): {col}")
-    row = {c: body[c] for c in _feature_columns}
+    # 스키마 순서대로 1행 DataFrame 생성 후 기존 모델로 예측 (컬럼 정렬로 재현성 유지)
+    row = {c: raw[c] for c in _feature_columns}
     X = pd.DataFrame([row])
-    predicted_rul = float(_model.predict(X)[0])
-    risk_status = classify_risk(predicted_rul)
-    return {"predicted_rul": predicted_rul, "risk_status": risk_status}
+    prediction = float(_model.predict(X)[0])
+    risk = classify_risk(prediction)
+    return {"prediction": prediction, "risk": risk}
