@@ -9,5 +9,6 @@ venv/
 data/raw/
 *.csv
 *.txt
+!requirements.txt
 
 .DS_Store
