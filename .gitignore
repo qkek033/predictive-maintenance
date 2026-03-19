@@ -1,8 +1,13 @@
 __pycache__/
 *.pyc
-.env
+*.pyo
+
 .venv/
 venv/
+.env
+
 data/raw/
 *.csv
 *.txt
+
+.DS_Store
