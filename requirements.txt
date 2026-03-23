@@ -1,7 +1,9 @@
 fastapi
 uvicorn
+streamlit
 pandas
 numpy
 scikit-learn
 lightgbm
 joblib
+plotly
